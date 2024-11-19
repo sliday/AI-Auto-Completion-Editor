@@ -2,6 +2,8 @@
 
 Super simple, single-file text editor with real-time AI-powered auto-completion suggestions, supporting multiple AI models from Anthropic, OpenAI, and GROQ. 
 
+![CleanShot 2024-11-20 at 00 24 37@2x](https://github.com/user-attachments/assets/b9fb7a32-133a-418c-907c-abb8393a34cd)
+
 ## Features
 
 - Real-time AI text completion suggestions
@@ -14,6 +16,9 @@ Super simple, single-file text editor with real-time AI-powered auto-completion 
 - Persistent settings and content via localStorage
 - Clean, minimal interface using Pico CSS
 - JetBrains Mono font for optimal readability
+- Paste plain-text context to fine-tune the tone
+  
+![CleanShot 2024-11-20 at 00 29 38@2x](https://github.com/user-attachments/assets/13e5a15c-22b8-462e-b3eb-05782dcda141)
 
 ## Technologies Used
 
