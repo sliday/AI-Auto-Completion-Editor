@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+    <title>Simple Editor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        * {
+            font-family: "JetBrains Mono", monospace !important;
+        }  
+        body {
+            padding-top: 2rem;
+        }
+        main {
+            max-width: 66ch;
+            margin: 0 auto;
+        }
+        .editor-container {
+            position: relative;
+            min-height: 100px;  /* Minimum height */
+        }
+        .editor, .suggestion {
+            position: absolute;
+            width: 100%;
+            min-height: 100%;
+            padding: 10px;
+            margin: 0;
+            border: none !important;
+            resize: none;
+            overflow: hidden;
+            white-space: pre-wrap;
+            background: transparent;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        .suggestion {
+            z-index: 1;
+            color: #999;
+            pointer-events: none;
+        }
+        .editor {
+            z-index: 2;
+        }
+        #apiKey {
+            width: 100%;
+            margin-bottom: 1rem;
+            border-radius: 0;
+            outline: none;
+        }
+        textarea:focus {
+            outline: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        #modelSelect {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .slider-container {
+            margin-bottom: 1rem;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        #temperatureSlider {
+            width: 100%;
+        }
+        .settings-container {
+            border: 1px solid #66666666;
+            border-radius: 16px;
+            margin-bottom: 1rem;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .settings-container input,
+        .settings-container select,
+        .settings-container label,
+        .settings-container a,
+        .settings-container .settings-header {
+            font-size: 14px;
+        }
+        .settings-container input,
+        .settings-container select {
+            padding: 0.5rem;
+        }
+        .settings-container .slider-container {
+            font-size: 14px;
+        }
+        .settings-header {
+            padding: 1.25rem 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .settings-content {
+            padding: 1rem;
+            display: none;
+        }
+        .settings-content.expanded {
+            display: block;
+        }
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        .toggle-icon.expanded {
+            transform: rotate(180deg);
+        }
+        .api-keys {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .api-keys input {
+            width: 100%;
+        }
+        .desktop-only {
+            display: none;
+        }
+        .mobile-only {
+            display: none;
+        }
+        @media (min-width: 769px) {
+            .desktop-only {
+                display: block;
+            }
+        }
+        @media (max-width: 768px) {
+            .mobile-only {
+                display: block;
+            }
+        }
+        .context-container {
+            margin-bottom: 1rem;
+        }
+        .context {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            margin: 0;
+            border: none !important;
+            resize: none;
+            overflow: hidden;
+            white-space: pre-wrap;
+            background: transparent;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        .char-counter {
+            font-size: 12px;
+            color: #999;
+        }
+        .context-container {
+            margin-bottom: 1rem;
+        }
+        .context-container textarea {
+            width: 100%;
+            min-height: 100px;
+            resize: vertical;
+            font-size: 14px !important;
+        }
+        .char-counter {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <main>
+        <h4>AI Auto-Completion Editor</h4>
+        <h6 class="desktop-only">Press -> or Tab to accept AI suggestion</h6>
+        <h6 class="mobile-only">Tap or swipe -> to accept AI suggestion</h6>
+
+        <div class="settings-container">            
+            <div class="settings-header">
+                <span><b>Settings</b></span>
+                <span class="toggle-icon">v</span>
+            </div>
+            <div class="settings-content">
+                <div class="api-keys">
+                    <label for="groqKey">GROQ API Key: <a href="https://console.groq.com/keys">Get it here</a></label>
+                    <input type="password" id="groqKey" placeholder="Enter GROQ API Key">
+                    <label for="openaiKey">OpenAI API Key: <a href="https://platform.openai.com/account/api-keys">Get it here</a></label>
+                    <input type="password" id="openaiKey" placeholder="Enter OpenAI API Key">
+                    <label for="anthropicKey">Anthropic API Key: <a href="https://console.anthropic.com/keys">Get it here</a></label>
+                    <input type="password" id="anthropicKey" placeholder="Enter Anthropic API Key">
+                </div>
+                <select id="modelSelect" style="display: none;">
+                    <!-- Anthropic Models -->
+                    <optgroup label="Anthropic Models" class="anthropic-models" style="display: none;">
+                        <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                        <option value="claude-3-haiku">Claude 3 Haiku</option>
+                    </optgroup>
+                    <!-- OpenAI Models -->
+                    <optgroup label="OpenAI Models" class="openai-models" style="display: none;">
+                        <option value="gpt-4o">GPT-4</option>
+                        <option value="gpt-4o-mini">GPT-4 Mini</option>
+                        <option value="chatgpt-4o-latest">ChatGPT-4 Latest</option>
+                        <option value="gpt-4o-realtime-preview">GPT-4 Realtime Preview</option>
+                    </optgroup>
+                    <!-- GROQ Models -->
+                    <optgroup label="GROQ Models" class="groq-models" style="display: none;">
+                        <option value="gemma2-9b-it">Gemma 2 9B</option>
+                        <option value="gemma-7b-it">Gemma 7B</option>
+                        <option value="llama3-groq-70b-8192-tool-use-preview">LLaMA 3 70B Tool Use</option>
+                        <option value="llama3-groq-8b-8192-tool-use-preview">LLaMA 3 8B Tool Use</option>
+                        <option value="llama-3.1-70b-versatile">LLaMA 3.1 70B Versatile</option>
+                        <option value="llama-3.1-70b-specdec">LLaMA 3.1 70B SpecDec</option>
+                        <option value="llama-3.1-8b-instant">LLaMA 3.1 8B Instant</option>
+                        <option value="llama-3.2-1b-preview">LLaMA 3.2 1B</option>
+                        <option value="llama-3.2-3b-preview">LLaMA 3.2 3B</option>
+                        <option value="llama-3.2-11b-vision-preview">LLaMA 3.2 11B Vision</option>
+                        <option value="llama-3.2-90b-vision-preview">LLaMA 3.2 90B Vision</option>
+                        <option value="llama-guard-3-8b">LLaMA Guard 3 8B</option>
+                        <option value="llama3-70b-8192">LLaMA 3 70B</option>
+                        <option value="llama3-8b-8192">LLaMA 3 8B</option>
+                        <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+                    </optgroup>
+                </select>
+                <div class="slider-container" style="display: none;">
+                    <label for="temperatureSlider">Creativity: <span id="temperatureValue">0.1</span></label>
+                    <input type="range" id="temperatureSlider" min="0" max="100" value="10">
+                </div>
+                <div class="context-container">
+                    <label for="contextArea">Context (max 32kb):</label>
+                    <textarea id="contextArea" placeholder="Enter context for better completions..."></textarea>
+                    <div class="char-counter"><span id="contextCounter">0</span>/32768 characters</div>
+                </div>
+            </div>
+        </div>
+        <div class="editor-container">
+            <textarea class="suggestion" id="suggestionEditor" readonly></textarea>
+            <textarea class="editor" id="mainEditor" spellcheck="false"></textarea>
+        </div>
+    </main>
+
+    <script>
+        // Add this right after the opening <script> tag
+        // Initialize theme based on system preference
+        function updateTheme() {
+            const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+        }
+
+        // Set initial theme
+        updateTheme();
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
+
+        let typingTimer;
+        const doneTypingInterval = 500;
+
+        // Auto-resize function
+        function autoResize(elem) {
+            elem.style.height = 'auto';
+            elem.style.height = elem.scrollHeight + 'px';
+            // Update container height
+            $('.editor-container').height(elem.scrollHeight);
+            // Update the other textarea height
+            const otherTextarea = elem.id === 'mainEditor' ? 
+                                document.getElementById('suggestionEditor') : 
+                                document.getElementById('mainEditor');
+            otherTextarea.style.height = elem.scrollHeight + 'px';
+        }
+
+        // Initialize
+        $('#mainEditor').val(localStorage.getItem('editorContent') || '');
+        $('#groqKey').val(localStorage.getItem('groqApiKey') || '');
+        $('#openaiKey').val(localStorage.getItem('openaiApiKey') || '');
+        $('#anthropicKey').val(localStorage.getItem('anthropicApiKey') || '');
+        autoResize(document.getElementById('mainEditor'));
+
+        // Initialize model selection
+        $('#modelSelect').val(localStorage.getItem('selectedModel') || 'llama-3.1-8b-instant');
+
+        // Save model selection
+        $('#modelSelect').on('change', function() {
+            localStorage.setItem('selectedModel', $(this).val());
+        });
+
+        // Initialize temperature slider
+        const temperatureSlider = $('#temperatureSlider');
+        const temperatureValue = $('#temperatureValue');
+        
+        // Set initial value from localStorage or default to 0.1
+        const savedTemp = localStorage.getItem('temperature') || 0.1;
+        temperatureSlider.val(savedTemp * 100);
+        temperatureValue.text(savedTemp);
+
+        // Update temperature value and save to localStorage
+        temperatureSlider.on('input', function() {
+            const temp = ($(this).val() / 100).toFixed(2);
+            temperatureValue.text(temp);
+            localStorage.setItem('temperature', temp);
+        });
+
+        // Input handler with auto-resize
+        $('#mainEditor').on('input', function() {
+            const currentContent = $(this).val();
+            localStorage.setItem('editorContent', currentContent);
+            
+            // Auto-resize
+            autoResize(this);
+            
+            // Hide suggestion while typing
+            $('#suggestionEditor').val(currentContent);
+            
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(getSuggestion, doneTypingInterval);
+        });
+
+        // Save API key
+        $('#groqKey').on('input', function() {
+            localStorage.setItem('groqApiKey', $(this).val());
+        });
+
+        // Handle suggestion acceptance
+        $('#mainEditor').on('keydown', function(e) {
+            if ((e.key === 'Tab' || e.key === 'ArrowRight') && 
+                $('#suggestionEditor').val().startsWith($('#mainEditor').val()) && 
+                $('#suggestionEditor').val().length > $('#mainEditor').val().length) {
+                e.preventDefault();
+                applySuggestion();
+            }
+        });
+
+        // Add these validation functions
+        async function validateGroqKey(apiKey) {
+            try {
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.1-8b-instant",
+                        messages: [{ role: "user", content: "Hi" }],
+                        max_tokens: 1
+                    })
+                });
+                return response.status === 200;
+            } catch (error) {
+                console.error('GROQ validation error:', error);
+                return false;
+            }
+        }
+
+        async function validateOpenAIKey(apiKey) {
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: [{ role: "user", content: "Hi" }],
+                        max_tokens: 1
+                    })
+                });
+                return response.status === 200;
+            } catch (error) {
+                console.error('OpenAI validation error:', error);
+                return false;
+            }
+        }
+
+        async function validateAnthropicKey(apiKey) {
+            try {
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: "claude-3-haiku",
+                        messages: [{ role: "user", content: "Hi" }],
+                        max_tokens: 1
+                    })
+                });
+                return response.status === 200;
+            } catch (error) {
+                console.error('Anthropic validation error:', error);
+                return false;
+            }
+        }
+
+        // Update the updateModelList function
+        async function updateModelList() {
+            const groqKey = $('#groqKey').val();
+            const openaiKey = $('#openaiKey').val();
+            const anthropicKey = $('#anthropicKey').val();
+            
+            // Hide all models and slider initially
+            $('.groq-models, .openai-models, .anthropic-models').hide();
+            $('#modelSelect, .slider-container').hide();
+            
+            let hasValidKey = false;
+            
+            // Add loading indicator to keys being validated
+            const addLoading = (elem) => {
+                elem.prop('disabled', true);
+                elem.css('opacity', '0.7');
+            };
+            
+            const removeLoading = (elem) => {
+                elem.prop('disabled', false);
+                elem.css('opacity', '1');
+            };
+
+            // Validate GROQ key
+            if (groqKey) {
+                addLoading($('#groqKey'));
+                const isValidGroq = await validateGroqKey(groqKey);
+                removeLoading($('#groqKey'));
+                
+                if (isValidGroq) {
+                    $('.groq-models').show();
+                    hasValidKey = true;
+                } else {
+                    $('#groqKey').css('border-color', 'red');
+                    setTimeout(() => $('#groqKey').css('border-color', ''), 2000);
+                }
+            }
+
+            // Validate OpenAI key
+            if (openaiKey) {
+                addLoading($('#openaiKey'));
+                const isValidOpenAI = await validateOpenAIKey(openaiKey);
+                removeLoading($('#openaiKey'));
+                
+                if (isValidOpenAI) {
+                    $('.openai-models').show();
+                    hasValidKey = true;
+                } else {
+                    $('#openaiKey').css('border-color', 'red');
+                    setTimeout(() => $('#openaiKey').css('border-color', ''), 2000);
+                }
+            }
+
+            // Validate Anthropic key
+            if (anthropicKey) {
+                addLoading($('#anthropicKey'));
+                const isValidAnthropic = await validateAnthropicKey(anthropicKey);
+                removeLoading($('#anthropicKey'));
+                
+                if (isValidAnthropic) {
+                    $('.anthropic-models').show();
+                    hasValidKey = true;
+                } else {
+                    $('#anthropicKey').css('border-color', 'red');
+                    setTimeout(() => $('#anthropicKey').css('border-color', ''), 2000);
+                }
+            }
+            
+            // Show model select and slider if we have any valid key
+            if (hasValidKey) {
+                $('#modelSelect, .slider-container').show();
+                
+                // If we have at least one key, ensure a valid model is selected
+                if (!$('#modelSelect').val()) {
+                    const firstAvailableOption = $('#modelSelect optgroup:visible option').first();
+                    if (firstAvailableOption.length) {
+                        $('#modelSelect').val(firstAvailableOption.val());
+                        localStorage.setItem('selectedModel', firstAvailableOption.val());
+                    }
+                }
+            } else {
+                $('#modelSelect').html('<option value="">Please enter a valid API key</option>');
+            }
+        }
+
+        // Update the API key input handlers to use debounce
+        let keyValidationTimer;
+        $('.api-keys input').on('input', function() {
+            const keyType = this.id;
+            const value = $(this).val();
+            
+            // Save to localStorage
+            localStorage.setItem(keyType, value);
+            
+            // Debounce the validation
+            clearTimeout(keyValidationTimer);
+            keyValidationTimer = setTimeout(() => {
+                updateModelList();
+            }, 500);
+        });
+
+        // Initialize context from localStorage
+        $('#contextArea').val(localStorage.getItem('editorContext') || '');
+
+        // Handle context input with character limit
+        $('#contextArea').on('input', function() {
+            const maxLength = 32768;
+            let text = $(this).val();
+            
+            if (text.length > maxLength) {
+                $(this).val(text.substring(0, maxLength));
+                text = $(this).val();
+            }
+            
+            $('#contextCounter').text(text.length);
+            localStorage.setItem('editorContext', text);
+        });
+
+        // Update getSuggestion function to include context
+        async function getSuggestion() {
+            const selectedModel = $('#modelSelect').val();
+            const isOpenAI = selectedModel.includes('gpt-4o');
+            const isAnthropic = selectedModel.includes('claude');
+            
+            let apiKey;
+            if (isOpenAI) {
+                apiKey = $('#openaiKey').val();
+            } else if (isAnthropic) {
+                apiKey = $('#anthropicKey').val();
+            } else {
+                apiKey = $('#groqKey').val();
+            }
+            
+            if (!apiKey) return;
+
+            const content = $('#mainEditor').val();
+            if (!content.trim()) return;
+
+            const context = $('#contextArea').val();
+            
+            try {
+                let endpoint, headers, body;
+                
+                if (isAnthropic) {
+                    endpoint = 'https://api.anthropic.com/v1/messages';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01'
+                    };
+                    body = {
+                        model: selectedModel,
+                        messages: [{
+                            role: "user",
+                            content: context ? 
+                                `Context:\n${context}\n\nComplete this text with a natural ending: ${content}` :
+                                `Complete this text with a natural ending: ${content}`
+                        }],
+                        max_tokens: 50,
+                        temperature: parseFloat($('#temperatureValue').text())
+                    };
+                } else {
+                    endpoint = isOpenAI ? 
+                        'https://api.openai.com/v1/chat/completions' : 
+                        'https://api.groq.com/openai/v1/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    };
+                    body = {
+                        model: selectedModel,
+                        messages: [{
+                            role: "user",
+                            content: context ?
+                                `You are an experienced editor. Context:\n${context}\n\nContent to finish:\n~~~\n${content}\n~~~\nTry to guess what the ending of the sentence is. No intro, no comments, just the ending. Do not repeat content, only output the ending substring. Complete this text:` :
+                                `You are an experienced editor. Content to finish:\n~~~\n${content}\n~~~\nTry to guess what the ending of the sentence is. No intro, no comments, just the ending. Do not repeat content, only output the ending substring. Complete this text:`
+                        }],
+                        max_tokens: 50,
+                        temperature: parseFloat($('#temperatureValue').text())
+                    };
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(body)
+                });
+
+                const data = await response.json();
+                if (data.content || (data.choices && data.choices[0])) {
+                    let suggestion = isAnthropic ? 
+                        data.content : 
+                        data.choices[0].message.content;
+                        
+                    suggestion = suggestion.replace(/^\.{3,}/, '').trim();
+                    
+                    if (!content.endsWith(' ')) {
+                        suggestion = ' ' + suggestion;
+                    }
+                    
+                    $('#suggestionEditor').val(content + suggestion);
+                    autoResize(document.getElementById('suggestionEditor'));
+                }
+            } catch (error) {
+                console.error('Error getting suggestion:', error);
+            }
+        }
+
+        // Initial model list update
+        updateModelList();
+
+        // Initialize settings panel state
+        const settingsContent = $('.settings-content');
+        const settingsHeader = $('.settings-header');
+        const toggleIcon = $('.toggle-icon');
+        
+        // Set initial state from localStorage or default to expanded
+        const isExpanded = localStorage.getItem('settingsExpanded') !== 'false';
+        if (isExpanded) {
+            settingsContent.addClass('expanded');
+            toggleIcon.addClass('expanded');
+        }
+
+        // Toggle settings panel
+        settingsHeader.on('click', function() {
+            settingsContent.toggleClass('expanded');
+            toggleIcon.toggleClass('expanded');
+            localStorage.setItem('settingsExpanded', settingsContent.hasClass('expanded'));
+        });
+
+        // Add touch event handling to the editor container
+        function initializeTouchEvents() {
+            const editorContainer = document.querySelector('.editor-container');
+            let touchStartX = 0;
+            let touchEndX = 0;
+            const minSwipeDistance = 50; // minimum distance for swipe
+
+            editorContainer.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+            }, false);
+
+            editorContainer.addEventListener('touchmove', (e) => {
+                touchEndX = e.touches[0].clientX;
+            }, false);
+
+            editorContainer.addEventListener('touchend', (e) => {
+                handleTouchEnd();
+            }, false);
+
+            // Add tap handler for suggestion
+            $('#suggestionEditor').on('click touchend', function(e) {
+                e.preventDefault();
+                applySuggestion();
+            });
+
+            function handleTouchEnd() {
+                const swipeDistance = touchEndX - touchStartX;
+                
+                // Check if it's a right swipe
+                if (swipeDistance > minSwipeDistance) {
+                    applySuggestion();
+                }
+            }
+        }
+
+        // Function to apply suggestion
+        function applySuggestion() {
+            const mainEditor = $('#mainEditor');
+            const suggestionEditor = $('#suggestionEditor');
+            
+            if (suggestionEditor.val().startsWith(mainEditor.val()) && 
+                suggestionEditor.val().length > mainEditor.val().length) {
+                mainEditor.val(suggestionEditor.val());
+                suggestionEditor.val('');
+                localStorage.setItem('editorContent', mainEditor.val());
+                autoResize(document.getElementById('mainEditor'));
+            }
+        }
+
+        // Initialize touch events
+        initializeTouchEvents();
+
+        // Add some helpful CSS for mobile
+        const mobileStyles = `
+            @media (max-width: 768px) {
+                .editor-container {
+                    touch-action: pan-y pinch-zoom;
+                }
+                .suggestion {
+                    cursor: pointer;
+                }
+                main {
+                    padding: 0.5rem;
+                }
+                .settings-container {
+                    margin: 0.5rem 0;
+                }
+                .settings-header {
+                    padding: 1rem 0.75rem;
+                }
+                .settings-content {
+                    padding: 0.75rem;
+                }
+                textarea {
+                    font-size: 16px !important; /* Prevent iOS zoom on focus */
+                }
+            }
+        `;
+
+        // Add mobile styles to the document
+        const styleSheet = document.createElement("style");
+        styleSheet.textContent = mobileStyles;
+        document.head.appendChild(styleSheet);
+    </script>
+</body>
+</html> 
